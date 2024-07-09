@@ -78,48 +78,16 @@ describe("deployChaincode", () => {
       }
     });
 
-    const execSync = jest.spyOn(require("child_process"), "execSync");
-    execSync.mockImplementation(
-      () =>
-        '[{"contractName":"AppleContract"},{"contractName":"GalaChainToken"},{"contractName":"PublicKeyContract"}]'
-    );
+    jest
+      .spyOn(require("child_process"), "execSync")
+      .mockImplementationOnce(() => `[{"Architecture":"amd64","Os":"linux"}]`)
+      .mockImplementationOnce(
+        () =>
+          '[{"contractName":"AppleContract"},{"contractName":"GalaChainToken"},{"contractName":"PublicKeyContract"}]'
+      );
 
     // When
     const response = await deployChaincode({ privateKey, isTestnet, imageTag });
-
-    // Then
-    expect(response.status).toEqual("CH_CREATED");
-  });
-
-  it("should read a file with a private key and get deployChaincode response", async () => {
-    // Given
-    axios.post = jest.fn().mockResolvedValue({
-      status: 201,
-      data: {
-        status: "CH_CREATED"
-      }
-    });
-
-    process.env = { ...process.env, DEV_PRIVATE_KEY: undefined };
-
-    const execSync = jest.spyOn(require("child_process"), "execSync");
-    execSync.mockImplementation(
-      () =>
-        '[{"contractName":"AppleContract"},{"contractName":"GalaChainToken"},{"contractName":"PublicKeyContract"}]'
-    );
-
-    jest
-      .spyOn(fs, "readFileSync")
-      .mockImplementation(() => "bf2168e0e2238b9d879847987f556a093040a2cab07983a20919ac33103d0d00");
-
-    const postDeployChaincodePrivateKey = {
-      privateKey: await getPrivateKey(undefined),
-      isTestnet,
-      imageTag
-    };
-
-    // When
-    const response = await deployChaincode(postDeployChaincodePrivateKey);
 
     // Then
     expect(response.status).toEqual("CH_CREATED");
@@ -136,15 +104,13 @@ describe("deployChaincode", () => {
 
     process.env = { ...process.env, DEV_PRIVATE_KEY: undefined };
 
-    const execSync = jest.spyOn(require("child_process"), "execSync");
-    execSync.mockImplementation(
-      () =>
-        '[{"contractName":"AppleContract"},{"contractName":"GalaChainToken"},{"contractName":"PublicKeyContract"}]'
-    );
-
-    jest.spyOn(fs, "readFileSync").mockImplementation(() => {
-      throw new Error();
-    });
+    jest
+      .spyOn(require("child_process"), "execSync")
+      .mockImplementationOnce(() => `[{"Architecture":"amd64","Os":"linux"}]`)
+      .mockImplementationOnce(
+        () =>
+          '[{"contractName":"AppleContract"},{"contractName":"GalaChainToken"},{"contractName":"PublicKeyContract"}]'
+      );
 
     jest.spyOn(ux, "prompt").mockResolvedValueOnce(privateKey);
 
@@ -166,11 +132,13 @@ describe("deployChaincode", () => {
       status: 401
     });
 
-    const execSync = jest.spyOn(require("child_process"), "execSync");
-    execSync.mockImplementation(
-      () =>
-        '[{"contractName":"AppleContract"},{"contractName":"GalaChainToken"},{"contractName":"PublicKeyContract"}]'
-    );
+    jest
+      .spyOn(require("child_process"), "execSync")
+      .mockImplementationOnce(() => `[{"Architecture":"amd64","Os":"linux"}]`)
+      .mockImplementationOnce(
+        () =>
+          '[{"contractName":"AppleContract"},{"contractName":"GalaChainToken"},{"contractName":"PublicKeyContract"}]'
+      );
 
     // When
     expect(async () => await deployChaincode({ privateKey, isTestnet, imageTag })).rejects.toThrowError(

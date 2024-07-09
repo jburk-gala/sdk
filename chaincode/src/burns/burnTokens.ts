@@ -134,7 +134,10 @@ export async function burnTokens(
         collection: tokenInstanceClassKey.collection,
         category: tokenInstanceClassKey.category,
         type: tokenInstanceClassKey.type,
-        additionalKey: tokenInstanceClassKey.additionalKey
+        additionalKey: tokenInstanceClassKey.additionalKey,
+        instance: tokenInstance.instance.toString(),
+        allowanceType: AllowanceType.Burn,
+        grantedBy: owner
       };
 
       applicableAllowanceResponse = await fetchAllowances(ctx, fetchAllowancesData);
@@ -162,7 +165,8 @@ export async function burnTokens(
       const allowancesUsed: boolean = await useAllowances(
         ctx,
         new BigNumber(tokenQuantity.quantity),
-        applicableAllowanceResponse
+        applicableAllowanceResponse,
+        AllowanceType.Burn
       );
 
       if (!allowancesUsed) {

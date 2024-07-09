@@ -1,15 +1,16 @@
 # Getting started
 
----
+## Option 1: Local Environment (Linux, MacOS, or Windows with WSL)
 
-## Local Environment (Linux, MacOS, or Windows with WSL)
+> If you are using Windows with WSL don't forget to enable integration with WSL on Docker Desktop.
 
-If you are using Windows with WSL don't forget to enable integration with WSL on Docker Desktop.
+[How to use Windows with WSL](./windows-wsl.md)
 
 ### Requirements
 
 You need to have the following tools installed on your machine:
-- Node.js 16+
+
+- Node.js 18+
 - Docker and Docker Compose
 - [jq](https://jqlang.github.io/jq/) and [yq](https://github.com/mikefarah/yq)
 
@@ -70,7 +71,7 @@ Navigate to [http://localhost:3010/graphiql](http://localhost:3010/graphiql) to 
 
 ---
 
-## Use Docker image (Linux, MacOS or Windows)
+## Option 2: Use Docker image (Linux, MacOS or Windows)
 
 ### Requirements
 
@@ -126,7 +127,7 @@ Navigate to [http://localhost:3010/graphiql](http://localhost:3010/graphiql) to 
 
 ---
 
-## Using Dev Containers (Linux or MacOS)
+## Option 3: Using Dev Containers (Linux or MacOS)
 
 ### Requirements
 
@@ -138,7 +139,7 @@ Navigate to [http://localhost:3010/graphiql](http://localhost:3010/graphiql) to 
 ### 1. Install our CLI
 
 ```
-npm i -g @gala-games/chain-cli
+npm i -g @gala-chain/cli
 ```
 
 Check the CLI:
@@ -234,3 +235,11 @@ You have to remove (or rename) that container to be able to reuse that name.
 #### ./fablo-target/fabric-config/configtx.yaml: no such file or directory
 
 Make sure you are running it as a administrator of the cmd or powershell.
+
+#### docker: Got permission denied
+
+If you get a `docker: Got permission denied` error when running npm run network:start or npm run network:up, you may need to enable the configuration:
+ ```
+Docker Desktop > Settins > General > Expose daemon on tcp://localhost:2375 without TLS
+```
+If it still doesn't work, you can try use the WSL Ubuntu-20.04 distribution to run the network.

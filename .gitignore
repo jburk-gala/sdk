@@ -6,6 +6,7 @@ tmp
 /out-tsc
 public/
 lib
+**/oclif.manifest.json
 
 # dependencies
 node_modules
@@ -42,3 +43,4 @@ testem.log
 Thumbs.db
 .npmrc
 /.nx
+chain-cli/bin/run

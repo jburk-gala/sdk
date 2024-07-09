@@ -19,21 +19,23 @@ import * as secp from "@noble/secp256k1";
 import axios from "axios";
 import fs, { promises as fsPromises } from "fs";
 import { nanoid } from "nanoid";
-import { writeFile } from "node:fs/promises";
 import path from "path";
 import process from "process";
 
-import { ServicePortal } from "./consts";
+import { ExpectedImageArchitecture, ServicePortal } from "./consts";
 import { GetChaincodeDeploymentDto, PostDeployChaincodeDto } from "./dto";
 import { execSync } from "./exec-sync";
 import { parseStringOrFileKey } from "./utils";
 
 const ConfigFileName = ".galachainrc.json";
 const PackageJsonFileName = "package.json";
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const os = require("os");
 
-export const DEFAULT_PRIVATE_KEYS_DIR = "keys";
-export const DEFAULT_ADMIN_PRIVATE_KEY_NAME = "gc-admin-key";
-export const DEFAULT_DEV_PRIVATE_KEY_NAME = "gc-dev-key";
+const DEFAULT_PRIVATE_KEYS_DIR = ".gc-keys";
+const DEFAULT_PUBLIC_KEYS_DIR = "keys";
+const DEFAULT_ADMIN_PRIVATE_KEY_NAME = "gc-admin-key";
+const DEFAULT_DEV_PRIVATE_KEY_NAME = "gc-dev-key";
 
 export interface Config {
   org: string;
@@ -96,8 +98,22 @@ export async function getDeploymentResponse(params: { privateKey: string; isTest
 }
 
 function getContractNames(imageTag: string): { contractName: string }[] {
+  const dockerImageInspect = execSync(`docker inspect --format=json ${imageTag}`);
+  let dockerJson;
+  try {
+    dockerJson = JSON.parse(dockerImageInspect);
+  } catch (e) {
+    throw new Error(`Invalid docker image inspect output: ${dockerImageInspect} - Error ${e}`);
+  }
+
+  const imageArchitecture = dockerJson[0].Os + "/" + dockerJson[0].Architecture;
+
+  if (imageArchitecture !== ExpectedImageArchitecture) {
+    throw new Error(`Unsupported architecture ${imageArchitecture}, expected ${ExpectedImageArchitecture}`);
+  }
+
   const command = `docker run --rm ${imageTag} lib/src/cli.js get-contract-names | tail -n 1`;
-  let response: string = "<failed>";
+  let response = "<failed>";
 
   try {
     response = execSync(command);
@@ -140,26 +156,50 @@ export async function deployChaincode(params: { privateKey: string; isTestnet: b
   return response.data;
 }
 
-export async function generateKeys(keysPath: string): Promise<void> {
+export async function generateKeys(projectPath: string): Promise<void> {
+  const keysPath = path.join(projectPath, DEFAULT_PUBLIC_KEYS_DIR);
+
   const adminPrivateKey = secp.utils.bytesToHex(secp.utils.randomPrivateKey());
   const adminPublicKey = secp.utils.bytesToHex(secp.getPublicKey(adminPrivateKey));
 
   const devPrivateKey = secp.utils.bytesToHex(secp.utils.randomPrivateKey());
   const devPublicKey = secp.utils.bytesToHex(secp.getPublicKey(devPrivateKey));
 
-  fs.mkdir(`${keysPath}`, (err) => {
-    if (err) console.error(`Could not create a directory ${keysPath}. Error: ${err}`);
-  });
+  const chaincodeName = "gc-" + signatures.getEthAddress(adminPublicKey);
+  const privateKeysPath = path.join(os.homedir(), DEFAULT_PRIVATE_KEYS_DIR, chaincodeName);
 
-  await writeFile(`${keysPath}/${DEFAULT_ADMIN_PRIVATE_KEY_NAME}.pub`, adminPublicKey);
-  await writeFile(`${keysPath}/${DEFAULT_ADMIN_PRIVATE_KEY_NAME}`, adminPrivateKey.toString());
-  await writeFile(`${keysPath}/${DEFAULT_DEV_PRIVATE_KEY_NAME}.pub`, devPublicKey);
-  await writeFile(`${keysPath}/${DEFAULT_DEV_PRIVATE_KEY_NAME}`, devPrivateKey.toString());
+  // create the keys directory
+  execSync(`mkdir -p ${keysPath}`);
+  execSync(`mkdir -p ${privateKeysPath}`);
+
+  // create the public and private keys files
+  execSync(`echo '${adminPublicKey}' > ${keysPath}/${DEFAULT_ADMIN_PRIVATE_KEY_NAME}.pub`);
+  execSync(`echo '${devPublicKey}' > ${keysPath}/${DEFAULT_DEV_PRIVATE_KEY_NAME}.pub`);
+
+  execSync(`echo '${adminPrivateKey.toString()}' > ${privateKeysPath}/${DEFAULT_ADMIN_PRIVATE_KEY_NAME}`);
+  execSync(`echo '${devPrivateKey.toString()}' > ${privateKeysPath}/${DEFAULT_DEV_PRIVATE_KEY_NAME}`);
+
+  console.log(`Chaincode name:         ${chaincodeName}`);
+  console.log(`Public keys directory:  ${keysPath}`);
+  console.log(`Private keys directory: ${privateKeysPath}`);
+}
+
+export function checkCliVersion() {
+  const cliLatestVersion = execSync("npm show @gala-chain/cli version");
+  const cliCurrentVersion = execSync("galachain --version").split(" ")[0].split("/")[2];
+  if (cliLatestVersion > cliCurrentVersion) {
+    this.warn(
+      `Your Chain CLI is out of date, current version is ${cliCurrentVersion}, latest version is ${cliLatestVersion}. Please run 'npm install -g @gala-chain/cli --force' to update to the latest version.`
+    );
+  }
 }
 
 export async function getPrivateKey(keysFromArg: string | undefined) {
   return (
-    keysFromArg || process.env.DEV_PRIVATE_KEY || getPrivateKeyFromFile() || (await getPrivateKeyPrompt())
+    keysFromArg ??
+    process.env.DEV_PRIVATE_KEY ??
+    (await getDefaultDevPrivateKeyFile()) ??
+    (await getPrivateKeyPrompt())
   );
 }
 
@@ -200,14 +240,27 @@ export async function overwriteApiConfig(contracts: string, channel: string, cha
   fs.writeFileSync(apiConfigPath, JSON.stringify(JSON.parse(apiConfigJson), null, 2));
 }
 
-function getPrivateKeyFromFile(): string | undefined {
+function getDefaultDevPrivateKeyFile(): string | undefined {
   try {
-    return fs.readFileSync(
-      `${process.cwd()}/${DEFAULT_PRIVATE_KEYS_DIR}/${DEFAULT_DEV_PRIVATE_KEY_NAME}`,
-      "utf8"
+    const defaultAdminPublicKeyPath = path.join(
+      process.cwd(),
+      DEFAULT_PUBLIC_KEYS_DIR,
+      `${DEFAULT_DEV_PRIVATE_KEY_NAME}.pub`
     );
+    const defaultAdminPublicKey = fs.readFileSync(defaultAdminPublicKeyPath, "utf8");
+    const chaincodeName = "gc-" + signatures.getEthAddress(defaultAdminPublicKey);
+
+    const defaultDevPrivateKeyPath = path.join(
+      os.homedir(),
+      DEFAULT_PRIVATE_KEYS_DIR,
+      chaincodeName,
+      DEFAULT_DEV_PRIVATE_KEY_NAME
+    );
+
+    return fs.readFileSync(defaultDevPrivateKeyPath, "utf8");
   } catch (e) {
     console.error(`Error reading file: ${e}`);
+    return undefined;
   }
 }
 

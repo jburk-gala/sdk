@@ -18,8 +18,7 @@ import * as fs from "fs";
 import path from "path";
 
 import BaseCommand from "../../base-command";
-import { execSync } from "../../exec-sync";
-import { DEFAULT_PRIVATE_KEYS_DIR, generateKeys } from "../../galachain-utils";
+import { checkCliVersion, generateKeys } from "../../galachain-utils";
 import { getPathFileName } from "../../utils";
 
 export default class Init extends BaseCommand<typeof Init> {
@@ -39,9 +38,11 @@ export default class Init extends BaseCommand<typeof Init> {
     const { args } = await this.parse(Init);
 
     try {
+      checkCliVersion();
+
       this.copyChaincodeTemplate(args.path);
 
-      // Update the name field in the package.json and the package-lock.json to be `@gala-games/<project-name>`
+      // Update the name field in the package.json and the package-lock.json to be `@gala-chain/<project-name>`
       const fileName = getPathFileName(args.path);
       const filesToUpdate = ["package.json", "package-lock.json"];
 
@@ -63,8 +64,7 @@ export default class Init extends BaseCommand<typeof Init> {
         }
       });
 
-      this.log(`Generating keys to ${args.path}/${DEFAULT_PRIVATE_KEYS_DIR}`);
-      await generateKeys(`${args.path}/${DEFAULT_PRIVATE_KEYS_DIR}`);
+      await generateKeys(args.path);
 
       this.log(`Project template initialized at ${args.path}`);
     } catch (error) {
@@ -74,6 +74,7 @@ export default class Init extends BaseCommand<typeof Init> {
 
   copyChaincodeTemplate(destinationPath: string): void {
     const sourceTemplateDir = path.resolve(require.resolve("."), "../../../chaincode-template");
-    execSync(`cp -R ${sourceTemplateDir} ${destinationPath}`);
+    fs.mkdirSync(destinationPath, { recursive: true });
+    fs.cpSync(sourceTemplateDir, destinationPath, { recursive: true });
   }
 }
