@@ -26,8 +26,7 @@ import {
   gcclient
 } from "@gala-chain/client";
 import { jest } from "@jest/globals";
-import path from "path";
-import process from "process";
+import * as path from "path";
 
 // use this timeout in each test that uses ContractTestClient
 jest.setTimeout(60 * 1000);
@@ -40,7 +39,8 @@ export function networkRoot() {
 }
 
 function defaultOpsApiConfigPath() {
-  return path.resolve(networkRoot(), "api-config.json");
+  // by default project root is a parent of network root
+  return path.resolve(networkRoot(), "..", "api-config.json");
 }
 
 function defaultConnectionProfilePath(orgKey: "curator" | "users" | "partner"): string {

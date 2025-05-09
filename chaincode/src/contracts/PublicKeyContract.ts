@@ -32,12 +32,7 @@ import {
 import { Info } from "fabric-contract-api";
 
 import { PublicKeyService } from "../services";
-import {
-  PkMismatchError,
-  PkNotFoundError,
-  ProfileExistsError,
-  ProfileNotFoundError
-} from "../services/PublicKeyError";
+import { PkMismatchError, PkNotFoundError, ProfileExistsError } from "../services/PublicKeyError";
 import { GalaChainContext } from "../types";
 import { GalaContract } from "./GalaContract";
 import { EVALUATE, GalaTransaction, SUBMIT } from "./GalaTransaction";
@@ -51,6 +46,8 @@ try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   version = require("../../package.json").version;
 }
+
+const curatorOrgMsp = process.env.CURATOR_ORG_MSP ?? "CuratorOrg";
 
 @Info({
   title: "PublicKeyContract",
@@ -156,7 +153,7 @@ export class PublicKeyContract extends GalaContract {
     in: RegisterUserDto,
     out: "string",
     description: "Registers a new user on chain under provided user alias.",
-    allowedOrgs: ["CuratorOrg"],
+    allowedOrgs: [curatorOrgMsp],
     verifySignature: true
   })
   public async RegisterUser(ctx: GalaChainContext, dto: RegisterUserDto): Promise<GalaChainResponse<string>> {
@@ -177,7 +174,7 @@ export class PublicKeyContract extends GalaContract {
     in: RegisterEthUserDto,
     out: "string",
     description: "Registers a new user on chain under alias derived from eth address.",
-    allowedOrgs: ["CuratorOrg"],
+    allowedOrgs: [curatorOrgMsp],
     verifySignature: true
   })
   public async RegisterEthUser(

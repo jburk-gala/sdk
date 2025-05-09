@@ -12,11 +12,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { instanceToInstance, plainToInstance } from "class-transformer";
+import { Type, instanceToInstance, plainToInstance } from "class-transformer";
 import { IsNotEmpty, IsOptional, ValidationError, validate } from "class-validator";
 import { JSONSchema } from "class-validator-jsonschema";
 
-import { ValidationFailedError, deserialize, getValidationErrorInfo, serialize, signatures } from "../utils";
+import {
+  ConstructorArgs,
+  ValidationFailedError,
+  deserialize,
+  getValidationErrorInfo,
+  serialize,
+  signatures
+} from "../utils";
+import { GalaChainResponse } from "./contract";
 
 type Base<T, BaseT> = T extends BaseT ? T : never;
 
@@ -135,6 +143,15 @@ export class ChainCallDTO {
 
   @JSONSchema({
     description:
+      "Prefix for Metamask transaction signatures. " +
+      "Necessary to format payloads correctly to recover publicKey from web3 signatures."
+  })
+  @IsOptional()
+  @IsNotEmpty()
+  public prefix?: string;
+
+  @JSONSchema({
+    description:
       "Public key of the user who signed the DTO. " +
       "Required for DER encoded signatures, since they miss recovery part."
   })
@@ -197,6 +214,28 @@ export class GetObjectHistoryDto extends ChainCallDTO {
   public readonly objectId: string;
 }
 
+export class DryRunDto extends ChainCallDTO {
+  @IsNotEmpty()
+  public readonly method: string;
+
+  @IsNotEmpty()
+  public readonly callerPublicKey: string;
+
+  @IsNotEmpty()
+  @IsOptional()
+  @Type(() => ChainCallDTO)
+  dto?: ChainCallDTO;
+}
+
+export class DryRunResultDto extends ChainCallDTO {
+  public response: GalaChainResponse<unknown>;
+  public writes: Record<string, string>;
+  public reads: Record<string, string>;
+  public deletes: Record<string, true>;
+}
+
+export type RegisterUserParams = ConstructorArgs<RegisterUserDto>;
+
 const publicKeyDescription =
   "A public key to be saved on chain.\n" +
   `It should be just the private part of the EC secp256k1 key, than can be retrieved this way: ` +
@@ -220,6 +259,8 @@ export class RegisterUserDto extends ChainCallDTO {
   publicKey: string;
 }
 
+export type RegisterEthUserParams = ConstructorArgs<RegisterEthUserDto>;
+
 @JSONSchema({
   description: `Dto for secure method to save public keys for Eth users. Method is called and signed by Curators`
 })
@@ -228,6 +269,8 @@ export class RegisterEthUserDto extends ChainCallDTO {
   @IsNotEmpty()
   publicKey: string;
 }
+
+export type UpdatePublicKeyParams = ConstructorArgs<UpdatePublicKeyDto>;
 
 export class UpdatePublicKeyDto extends ChainCallDTO {
   @JSONSchema({ description: publicKeyDescription })
@@ -243,6 +286,7 @@ export class GetPublicKeyDto extends ChainCallDTO {
   user?: string;
 }
 
+export type GetMyProfileParams = ConstructorArgs<GetMyProfileDto>;
 export class GetMyProfileDto extends ChainCallDTO {
   // make signature required
   @IsNotEmpty()

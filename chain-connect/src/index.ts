@@ -12,11 +12,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-const path = require("path");
-
-process.env.TS_NODE_PROJECT = path.resolve("test/tsconfig.json");
-process.env.NODE_ENV = "development";
-
-global.oclif = global.oclif || {};
-global.oclif.columns = 80;
+export * from "./GalachainConnectClient";
+export * from "./PublicKeyClient";
+export * from "./TokenClient";

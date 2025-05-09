@@ -23,7 +23,7 @@ import serialize from "./serialize";
 
 class InvalidKeyError extends ValidationFailedError {}
 
-class InvalidSignatureFormatError extends ValidationFailedError {}
+export class InvalidSignatureFormatError extends ValidationFailedError {}
 
 class InvalidDataHashError extends ValidationFailedError {}
 
@@ -62,7 +62,10 @@ function normalizePrivateKey(input: string): Buffer {
 
   if (encoding !== undefined) {
     const missing0 = secpPrivKeyLength.isMissingTrailing0(length) ? "0" : "";
-    return Buffer.from(missing0 + inputNo0x, encoding);
+    if (isValidHex(inputNo0x) || isValidBase64(inputNo0x)) {
+      return Buffer.from(missing0 + inputNo0x, encoding);
+    }
+    throw new InvalidKeyError(`Invalid private key: ${input}`);
   } else {
     const excl0x = startsWith0x ? " (excluding trailing '0x')" : "";
     const errorMessage =
@@ -96,9 +99,13 @@ function normalizePublicKey(input: string): Buffer {
       ? "base64"
       : undefined;
   if (encoding !== undefined) {
-    const buffer = Buffer.from(startsWith0x ? input.slice(2) : input, encoding);
-    const pair = validateSecp256k1PublicKey(buffer);
-    return Buffer.from(pair.getPublic().encode("array", true));
+    const inputNo0x = startsWith0x ? input.slice(2) : input;
+    if (isValidHex(inputNo0x) || isValidBase64(inputNo0x)) {
+      const buffer = Buffer.from(inputNo0x, encoding);
+      const pair = validateSecp256k1PublicKey(buffer);
+      return Buffer.from(pair.getPublic().encode("array", true));
+    }
+    throw new InvalidKeyError(`Invalid public key: ${input}`);
   } else {
     const excl0x = startsWith0x ? " (excluding trailing '0x')" : "";
     const errorMessage =
@@ -193,7 +200,18 @@ function secp256k1signatureFromDERHexString(hex: string): Secp256k1Signature {
   return { r: signature.r, s: signature.s, recoveryParam: undefined };
 }
 
-function normalizeSecp256k1Signature(s: string): Secp256k1Signature {
+function parseSecp256k1Signature(s: string): Secp256k1Signature {
+  const sigObject = normalizeSecp256k1Signature(s);
+
+  // Additional check for low-S normalization
+  if (sigObject && sigObject.s.cmp(ecSecp256k1.curve.n.shrn(1)) > 0) {
+    throw new InvalidSignatureFormatError("S value is too high", { signature: s });
+  }
+
+  return sigObject;
+}
+
+export function normalizeSecp256k1Signature(s: string): Secp256k1Signature {
   // standard format with recovery parameter
   if (s.length === 130) {
     return secp256k1signatureFrom130HexString(s);
@@ -232,13 +250,32 @@ function normalizeSecp256k1Signature(s: string): Secp256k1Signature {
   throw new InvalidSignatureFormatError(errorMessage, { signature: s });
 }
 
+export function flipSignatureParity<T extends EC.Signature | Secp256k1Signature>(signatureObj: T): T {
+  const curveN = ecSecp256k1.curve.n;
+  // flip sign of s to prevent malleability (S')
+  const newS = new BN(curveN).sub(signatureObj.s);
+  // flip recovery param
+  const newRecoverParam = signatureObj.recoveryParam != null ? 1 - signatureObj.recoveryParam : null;
+
+  // normalized signature
+  signatureObj.s = newS;
+  signatureObj.recoveryParam = newRecoverParam;
+
+  return signatureObj;
+}
+
 function signSecp256k1(dataHash: Buffer, privateKey: Buffer, useDer?: "DER"): string {
   if (dataHash.length !== 32) {
     const msg = `secp256k1 can sign only 32-bytes long data keccak hash (got ${dataHash.length})`;
     throw new InvalidDataHashError(msg);
   }
 
-  const signature = ecSecp256k1.sign(dataHash, privateKey);
+  let signature = ecSecp256k1.sign(dataHash, privateKey);
+
+  // Low-S normalization
+  if (signature.s.cmp(ecSecp256k1.curve.n.shrn(1)) > 0) {
+    signature = flipSignatureParity(signature);
+  }
 
   if (!useDer) {
     return (
@@ -289,15 +326,15 @@ function getDERSignature(obj: object, privateKey: Buffer): string {
   return signSecp256k1(calculateKeccak256(data), privateKey, "DER");
 }
 
-function recoverPublicKey(signature: string, obj: object): string {
-  const signatureObj = normalizeSecp256k1Signature(signature);
+function recoverPublicKey(signature: string, obj: object, prefix = ""): string {
+  const signatureObj = parseSecp256k1Signature(signature);
   const recoveryParam = signatureObj.recoveryParam;
   if (recoveryParam === undefined) {
     const message = "Signature must contain recovery part (typically 1b or 1c as the last two characters)";
     throw new InvalidSignatureFormatError(message, { signature });
   }
 
-  const data = Buffer.from(getPayloadToSign(obj));
+  const data = Buffer.concat([Buffer.from(prefix), Buffer.from(getPayloadToSign(obj))]);
   const dataHash = Buffer.from(keccak256.hex(data), "hex");
   const publicKeyObj = ecSecp256k1.recoverPubKey(dataHash, signatureObj, recoveryParam);
   return publicKeyObj.encode("hex", false);
@@ -307,7 +344,7 @@ function isValid(signature: string, obj: object, publicKey: string): boolean {
   const data = Buffer.from(getPayloadToSign(obj));
   const publicKeyBuffer = normalizePublicKey(publicKey);
 
-  const signatureObj = normalizeSecp256k1Signature(signature);
+  const signatureObj = parseSecp256k1Signature(signature);
   const dataHash = Buffer.from(keccak256.hex(data), "hex");
   return isValidSecp256k1Signature(signatureObj, dataHash, publicKeyBuffer);
 }
@@ -325,7 +362,7 @@ function enforceValidPublicKey(
     throw new InvalidSignatureFormatError(`Signature is ${signature}`, { signature });
   }
 
-  const signatureObj = normalizeSecp256k1Signature(signature);
+  const signatureObj = parseSecp256k1Signature(signature);
 
   if (publicKey === undefined) {
     if (signatureObj.recoveryParam === undefined) {
@@ -347,6 +384,14 @@ function enforceValidPublicKey(
   }
 }
 
+function isValidHex(input: string) {
+  return /^[0-9a-fA-F]*$/.test(input);
+}
+
+function isValidBase64(input: string) {
+  return /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(input);
+}
+
 export default {
   calculateKeccak256,
   enforceValidPublicKey,
@@ -358,10 +403,12 @@ export default {
   getSignature,
   getDERSignature,
   isValid,
+  isValidBase64,
+  isValidHex,
   isValidSecp256k1Signature,
   normalizePrivateKey,
   normalizePublicKey,
-  normalizeSecp256k1Signature,
+  parseSecp256k1Signature,
   recoverPublicKey,
   validatePublicKey,
   validateSecp256k1PublicKey

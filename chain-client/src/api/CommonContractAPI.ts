@@ -13,25 +13,33 @@
  * limitations under the License.
  */
 import {
+  ChainCallDTO,
   ContractAPI,
+  DryRunDto,
+  DryRunResultDto,
   GalaChainResponse,
   GetObjectDto,
   GetObjectHistoryDto,
   createValidDTO
 } from "@gala-chain/api";
 
-import { ChainClient } from "../generic/ChainClient";
+import { ChainClient } from "../generic";
 
 export interface CommonContractAPI extends Record<string, unknown> {
-  GetChaincodeVersion(): Promise<GalaChainResponse<string>>;
+  GetContractVersion(): Promise<GalaChainResponse<string>>;
   GetContractAPI(): Promise<GalaChainResponse<ContractAPI>>;
   GetObjectByKey(key: string): Promise<GalaChainResponse<Record<string, unknown>>>;
   GetObjectHistory(key: string): Promise<GalaChainResponse<Record<string, unknown>>>;
+  DryRun(
+    method: string,
+    callerPublicKey: string,
+    dto: ChainCallDTO
+  ): Promise<GalaChainResponse<DryRunResultDto>>;
 }
 
 export const commonContractAPI = (client: ChainClient): CommonContractAPI => ({
-  async GetChaincodeVersion(): Promise<GalaChainResponse<string>> {
-    const resp = await client.evaluateTransaction("GetChaincodeVersion");
+  async GetContractVersion(): Promise<GalaChainResponse<string>> {
+    const resp = await client.evaluateTransaction("GetContractVersion");
     return resp as GalaChainResponse<string>;
   },
 
@@ -50,5 +58,15 @@ export const commonContractAPI = (client: ChainClient): CommonContractAPI => ({
     const dto = await createValidDTO(GetObjectHistoryDto, { objectId: key });
     const resp = await client.evaluateTransaction("GetObjectHistory", dto);
     return resp as GalaChainResponse<Record<string, unknown>>;
+  },
+
+  async DryRun(
+    method: string,
+    callerPublicKey: string,
+    dto: ChainCallDTO
+  ): Promise<GalaChainResponse<DryRunResultDto>> {
+    const dryRunDto = await createValidDTO(DryRunDto, { method, callerPublicKey, dto });
+    const resp = await client.evaluateTransaction("DryRun", dryRunDto);
+    return resp as GalaChainResponse<DryRunResultDto>;
   }
 });
