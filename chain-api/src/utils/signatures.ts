@@ -29,7 +29,7 @@ class InvalidDataHashError extends ValidationFailedError {}
 
 function getPayloadToSign(obj: object): string {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { signature, trace, ...plain } = instanceToPlain(obj);
+  const { signature, signatures, trace, ...plain } = instanceToPlain(obj);
   return serialize(plain);
 }
 
@@ -312,6 +312,13 @@ function isValid(signature: string, obj: object, publicKey: string): boolean {
   return isValidSecp256k1Signature(signatureObj, dataHash, publicKeyBuffer);
 }
 
+function isValidMulti(signatures: string[], obj: object, publicKeys: string[]): boolean {
+  if (signatures.length !== publicKeys.length) {
+    return false;
+  }
+  return signatures.every((sig, idx) => isValid(sig, obj, publicKeys[idx]));
+}
+
 function validatePublicKey(publicKey: Buffer): void {
   validateSecp256k1PublicKey(publicKey);
 }
@@ -347,6 +354,10 @@ function enforceValidPublicKey(
   }
 }
 
+function recoverPublicKeys(signatures: string[], obj: object): string[] {
+  return signatures.map((sig) => recoverPublicKey(sig, obj));
+}
+
 export default {
   calculateKeccak256,
   enforceValidPublicKey,
@@ -358,11 +369,15 @@ export default {
   getSignature,
   getDERSignature,
   isValid,
+  isValidMulti,
   isValidSecp256k1Signature,
   normalizePrivateKey,
   normalizePublicKey,
   normalizeSecp256k1Signature,
   recoverPublicKey,
+  recoverPublicKeys,
   validatePublicKey,
   validateSecp256k1PublicKey
 } as const;
+
+export { isValidMulti, recoverPublicKeys };
