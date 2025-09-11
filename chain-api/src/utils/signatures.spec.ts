@@ -29,9 +29,9 @@ describe("getPayloadToSign", () => {
     expect(toSign).toEqual('{"a":3,"b":[{"x":4,"y":5,"z":6},7],"c":8}');
   });
 
-  it("should ignore 'signature' and 'trace' fields", () => {
+  it("should ignore 'signature', 'signatures' and 'trace' fields", () => {
     // Given
-    const obj = { c: 8, signature: "to-be-ignored", trace: 3 };
+    const obj = { c: 8, signature: "to-be-ignored", signatures: ["a", "b"], trace: 3 };
 
     // When
     const toSign = signatures.getPayloadToSign(obj);
@@ -237,6 +237,36 @@ describe("signatures", () => {
 
     // Then
     await expect(actual).rejects.toThrowError(/Signature must contain recovery part/);
+  });
+
+  describe("multi-signatures", () => {
+    const privateKey2 = "313871326028141e0bdeef59fe32a6fc51bce449e44907c191558cb6fdca1341";
+    const publicKey2 =
+      "04651b1e822f794444fbc96424da6b3536e725c92dbe0047f357cec15fbe5ff148ef0d0d37affaf4ee1d6d0da680bdbd177240913353c6792a60be6ddfb1ce25fb";
+
+    const sig1 = signatures.getSignature(payload, signatures.normalizePrivateKey(privateKey));
+    const sig2 = signatures.getSignature(payload, signatures.normalizePrivateKey(privateKey2));
+
+    it("should verify multiple signatures", () => {
+      const result = signatures.isValidMulti([sig1, sig2], payload, [publicKey, publicKey2]);
+      expect(result).toEqual(true);
+    });
+
+    it("should recover public keys from multiple signatures", () => {
+      const keys = signatures.recoverPublicKeys([sig1, sig2], payload);
+      expect(keys).toEqual([publicKey, publicKey2]);
+    });
+
+    it("should fail if any signature invalid", () => {
+      const invalid = "aa" + sig2.substring(2);
+      const result = signatures.isValidMulti([sig1, invalid], payload, [publicKey, publicKey2]);
+      expect(result).toEqual(false);
+    });
+
+    it("should fail when counts do not match", () => {
+      const result = signatures.isValidMulti([sig1], payload, [publicKey, publicKey2]);
+      expect(result).toEqual(false);
+    });
   });
 
   it("Test multiple formats for each der signature length", async () => {
