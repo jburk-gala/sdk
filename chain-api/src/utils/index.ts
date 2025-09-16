@@ -2,7 +2,7 @@ import deserialize from "./deserialize";
 import { Primitive, generateResponseSchema, generateSchema } from "./generate-schema";
 import { ValidationErrorInfo, getValidationErrorInfo } from "./getValidationErrorMessage";
 import serialize from "./serialize";
-import signatures from "./signatures";
+import signatures, { isValidMulti, recoverPublicKeys } from "./signatures";
 
 /*
  * Copyright (c) Gala Games Inc. All rights reserved.
@@ -31,5 +31,7 @@ export {
   getValidationErrorInfo,
   ValidationErrorInfo,
   Primitive,
-  signatures
+  signatures,
+  isValidMulti,
+  recoverPublicKeys
 };

@@ -15,7 +15,7 @@
 import BN from "bn.js";
 import { ec as EC } from "elliptic";
 
-import signatures from "./signatures";
+import signatures, { isValidMulti, recoverPublicKeys } from "./signatures";
 
 describe("getPayloadToSign", () => {
   it("should sort keys", () => {
@@ -29,9 +29,9 @@ describe("getPayloadToSign", () => {
     expect(toSign).toEqual('{"a":3,"b":[{"x":4,"y":5,"z":6},7],"c":8}');
   });
 
-  it("should ignore 'signature' and 'trace' fields", () => {
+  it("should ignore 'signature', 'signatures', and 'trace' fields", () => {
     // Given
-    const obj = { c: 8, signature: "to-be-ignored", trace: 3 };
+    const obj = { c: 8, signature: "to-be-ignored", signatures: ["x", "y"], trace: 3 };
 
     // When
     const toSign = signatures.getPayloadToSign(obj);
@@ -290,6 +290,42 @@ describe("signatures", () => {
       r: new BN("30ef238065ff606bcb59ce9b40923bb1f86777056eabbf77ecbefd101d207fbd", "hex"),
       recoveryParam: undefined,
       s: new BN("14d3aed3bf7e07cb3bf2ef2c06cfde6db461eea8f58827df5b0fa4185d6535", "hex")
+    });
+  });
+
+  describe("multi signatures", () => {
+    it("should verify multiple signatures", () => {
+      // When
+      const actual = isValidMulti([signature, signature], payload, [publicKey, publicKey]);
+
+      // Then
+      expect(actual).toEqual(true);
+    });
+
+    it("should fail to verify when one signature is invalid", () => {
+      // Given
+      const invalidSignature = "aa" + signature.substring(2);
+
+      // When
+      const actual = isValidMulti([signature, invalidSignature], payload, [publicKey, publicKey]);
+
+      // Then
+      expect(actual).toEqual(false);
+    });
+
+    it("should recover public keys from signatures", () => {
+      // When
+      const recovered = recoverPublicKeys([signature, signature], payload);
+
+      // Then
+      expect(recovered).toEqual([publicKey, publicKey]);
+    });
+
+    it("should fail to recover public keys without recovery param", () => {
+      // Then
+      expect(() => recoverPublicKeys([signature, derSignature], payload)).toThrowError(
+        /Signature must contain recovery part/
+      );
     });
   });
 });
