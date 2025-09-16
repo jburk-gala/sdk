@@ -29,7 +29,7 @@ class InvalidDataHashError extends ValidationFailedError {}
 
 function getPayloadToSign(obj: object): string {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { signature, trace, ...plain } = instanceToPlain(obj);
+  const { signature, signatures, trace, ...plain } = instanceToPlain(obj);
   return serialize(plain);
 }
 
@@ -303,6 +303,10 @@ function recoverPublicKey(signature: string, obj: object): string {
   return publicKeyObj.encode("hex", false);
 }
 
+export function recoverPublicKeys(signatures: string[], obj: object): string[] {
+  return signatures.map((sig) => recoverPublicKey(sig, obj));
+}
+
 function isValid(signature: string, obj: object, publicKey: string): boolean {
   const data = Buffer.from(getPayloadToSign(obj));
   const publicKeyBuffer = normalizePublicKey(publicKey);
@@ -310,6 +314,22 @@ function isValid(signature: string, obj: object, publicKey: string): boolean {
   const signatureObj = normalizeSecp256k1Signature(signature);
   const dataHash = Buffer.from(keccak256.hex(data), "hex");
   return isValidSecp256k1Signature(signatureObj, dataHash, publicKeyBuffer);
+}
+
+export function isValidMulti(
+  signatures: string[],
+  obj: object,
+  publicKeys: string[]
+): boolean {
+  if (signatures.length !== publicKeys.length) {
+    return false;
+  }
+  for (let i = 0; i < signatures.length; i++) {
+    if (!isValid(signatures[i], obj, publicKeys[i])) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function validatePublicKey(publicKey: Buffer): void {
@@ -358,11 +378,13 @@ export default {
   getSignature,
   getDERSignature,
   isValid,
+  isValidMulti,
   isValidSecp256k1Signature,
   normalizePrivateKey,
   normalizePublicKey,
   normalizeSecp256k1Signature,
   recoverPublicKey,
+  recoverPublicKeys,
   validatePublicKey,
   validateSecp256k1PublicKey
 } as const;
